@@ -96,6 +96,7 @@ Try the live preview at **[9drive.zenhosta.com](https://9drive.zenhosta.com)**.
 - Email/password sign-up (optional reCAPTCHA) or **Continue with Google**, which connects your first Drive automatically.
 - Google OAuth credentials can be set in **Settings**. No `.env` editing needed.
 - Backup/restore and one-click updates from Settings (for PM2 setups).
+- The first account is the **admin**. Only the admin sees and can use Google credentials, updates, and backup/restore. Set `ALLOW_REGISTRATION=false` to stop new sign-ups, and change roles with `npm run user:set-role -- <email> <admin|user>`. On an existing install, the oldest account becomes the admin when you update.
 
 ## Quick start
 
@@ -119,11 +120,13 @@ What happens behind the scenes:
 - The backend runs the database migrations on every start, so updating an existing install keeps your data.
 - If `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` are real values, the Google config is saved automatically. If they are blank, the app still starts and you can add them later in **Settings → Google Credentials**.
 
-| Service  | URL                     |
-| -------- | ----------------------- |
-| Frontend | http://localhost:5173   |
-| Backend  | http://localhost:4000   |
-| MySQL    | localhost:3306          |
+| Service  | URL                                            |
+| -------- | ---------------------------------------------- |
+| Frontend | http://localhost:5173                          |
+| Backend  | http://localhost:4000                          |
+| MySQL    | internal to the Docker network (not published) |
+
+By default the frontend and backend ports only listen on `127.0.0.1`, so other machines on your network can't reach them. To expose them directly, set `BIND_ADDRESS=0.0.0.0` in `.env`. On a server, prefer keeping the default and putting an HTTPS reverse proxy in front.
 
 <details>
 <summary><b>Useful Docker commands</b></summary>
@@ -135,6 +138,7 @@ docker compose exec backend npm run drive:revoke-public -- --dry-run   # list Dr
 docker compose exec backend npm run drive:revoke-public  # remove that public edit access (add -- --all to also remove view-only public links)
 docker compose down                 # stop
 docker compose down -v              # stop and delete the database volume
+docker compose exec backend npm run user:set-role -- you@example.com admin   # make an account the admin
 ```
 
 </details>
@@ -264,6 +268,7 @@ Either way, the credentials are encrypted and stored in MySQL as one global conf
 | `REFRESH_TOKEN_TTL_DAYS` | Refresh token lifetime (default `30`). |
 | `MAX_UPLOAD_BYTES` | Largest allowed upload (default 5 GB). |
 | `RECAPTCHA_SECRET_KEY` | Optional. Turns on captcha for sign-up, together with the frontend site key. |
+| `ALLOW_REGISTRATION` | `true` (default) lets anyone create an account. Set `false` to block new sign-ups, including first-time Google sign-ins. The first account on a fresh install can always be created. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` | Only read by the seed command. The app reads the encrypted copy from the database. |
 
 </details>
@@ -307,7 +312,7 @@ Captcha only turns on when **both** `VITE_RECAPTCHA_SITE_KEY` and `RECAPTCHA_SEC
 4. **Update Google Cloud Console:** add your frontend URL under *Authorized JavaScript origins* and your redirect URI under *Authorized redirect URIs*.
 
 Production tips:
-- Put the frontend and backend behind an HTTPS reverse proxy.
+- Put the frontend and backend behind an HTTPS reverse proxy running on the host. Ports `4000` and `5173` listen on `127.0.0.1` only by default, so point the proxy at `http://127.0.0.1:5173` and `http://127.0.0.1:4000`. If you can't run a proxy on the host, set `BIND_ADDRESS=0.0.0.0` in `.env`.
 - Don't expose the MySQL port to the internet.
 - Rebuild the frontend whenever `VITE_API_URL` or `VITE_RECAPTCHA_SITE_KEY` changes.
 - Publish the OAuth consent screen when you're ready. Google may ask to verify public apps.
